@@ -21,8 +21,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from app.auth import get_api_key, verify_api_key
+from app.auth import get_configured_key, verify_api_key
 from app.captcha_solver import solve_turnstile
+from app.config import (
+    get_api_key,
+    get_capsolver_api_key,
+    get_generation_config,
+    get_imagefree_config,
+    get_proxy_config,
+    get_server_config,
+    reload_config,
+)
 from app.imagefree_client import ImageFreeClient
 from app.models import (
     ImageGenerationRequest,
@@ -32,24 +41,29 @@ from app.models import (
     ModelObject,
 )
 
+# ── Load config ─────────────────────────────────────────────────────────
 load_dotenv()
 
-# ── Config ─────────────────────────────────────────────────────────────
-BASE_URL = os.getenv("IMAGEFREE_BASE_URL", "https://imagefree.org")
-SITE_KEY = "0x4AAAAAAB_58B_Bds-jVf2h"
-MAX_CONCURRENCY = int(os.getenv("MAX_CONCURRENCY", "1"))
-REQUEST_INTERVAL = int(os.getenv("REQUEST_INTERVAL_SECONDS", "30"))
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/data/images"))
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+_cfg_server = get_server_config()
+_cfg_imagefree = get_imagefree_config()
+_cfg_gen = get_generation_config()
+_PROXY = get_proxy_config()
+
+BASE_URL = _cfg_imagefree["base_url"]
+SITE_KEY = _cfg_imagefree["site_key"]
+MAX_CONCURRENCY = _cfg_gen["max_concurrency"]
+REQUEST_INTERVAL = _cfg_gen["request_interval"]
+OUTPUT_DIR = Path(_cfg_gen["output_dir"])
 
 # ── Lifespan ───────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Imagefree2API Gateway...")
-    logger.info(f"API Key: {get_api_key()}")
+    logger.info(f"API Key: {get_configured_key()}")
     logger.info(f"Max concurrency: {MAX_CONCURRENCY}")
     logger.info(f"Request interval: {REQUEST_INTERVAL}s")
+    logger.info(f"Proxy: {_PROXY or 'none'}")
     yield
     logger.info("Shutting down Imagefree2API Gateway...")
 
@@ -190,7 +204,7 @@ async def _generate_one(
         raise RuntimeError("Failed to solve Turnstile")
 
     # Step 2: Submit generation
-    client = ImageFreeClient()
+    client = ImageFreeClient(proxy=_PROXY)
     try:
         result = await client.submit_generation(
             prompt=prompt,
@@ -239,10 +253,10 @@ async def _generate_one(
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.getenv("PORT", "7860"))
+    port = _cfg_server["port"]
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host=_cfg_server["host"],
         port=port,
         reload=False,
         log_level="info",

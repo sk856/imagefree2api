@@ -3,16 +3,15 @@ Capsolver integration for Cloudflare Turnstile.
 """
 
 import os
-import time
 from typing import Optional
 from loguru import logger
 
-CAPSOLVER_API_KEY = os.getenv("CAPSOLVER_API_KEY", "")
+from app.config import get_capsolver_api_key, get_imagefree_config
 
 
 def solve_turnstile(
-    site_key: str,
-    page_url: str,
+    site_key: Optional[str] = None,
+    page_url: Optional[str] = None,
     api_key: Optional[str] = None,
     timeout: int = 60,
 ) -> Optional[str]:
@@ -20,17 +19,21 @@ def solve_turnstile(
     Solve Cloudflare Turnstile challenge via Capsolver.
 
     Args:
-        site_key: Turnstile site key from the page.
-        page_url: Full URL of the page with the Turnstile widget.
-        api_key: Capsolver API key (falls back to env CAPSOLVER_API_KEY).
+        site_key: Turnstile site key (default from config.yaml).
+        page_url: Full URL of the page (default from config.yaml).
+        api_key: Capsolver API key (default from config.yaml / .env).
         timeout: Maximum seconds to wait for a solution.
 
     Returns:
         The Turnstile token string, or None if failed.
     """
-    api_key = api_key or CAPSOLVER_API_KEY
+    cfg = get_imagefree_config()
+    site_key = site_key or cfg["site_key"]
+    page_url = page_url or cfg["base_url"]
+    api_key = api_key or get_capsolver_api_key()
+
     if not api_key:
-        logger.error("CAPSOLVER_API_KEY not set. Set it in .env or pass api_key.")
+        logger.error("CAPSOLVER_API_KEY not set. Set it in config.yaml or .env.")
         return None
 
     logger.info(f"Solving Turnstile via Capsolver | site_key={site_key} url={page_url}")
@@ -71,10 +74,7 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    token = solve_turnstile(
-        site_key="0x4AAAAAAB_58B_Bds-jVf2h",
-        page_url="https://imagefree.org",
-    )
+    token = solve_turnstile()
     if token:
         print(f"Token ({len(token)} chars): {token[:50]}...")
     else:

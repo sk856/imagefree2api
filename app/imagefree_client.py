@@ -13,8 +13,13 @@ from urllib.parse import urljoin
 import httpx
 from loguru import logger
 
-BASE_URL = "https://imagefree.org"
+from app.config import get_imagefree_config, get_proxy_config
+
+# Import configuration
+_cfg = get_imagefree_config()
+BASE_URL = _cfg["base_url"]
 API_ENDPOINT = urljoin(BASE_URL, "/api/image.php")
+_PROXY = get_proxy_config()
 
 # Default headers to mimic a real browser
 DEFAULT_HEADERS = {
@@ -56,13 +61,20 @@ class ImageFreeClient:
         session_cookies: Optional[Dict[str, str]] = None,
         visitor_id: Optional[str] = None,
         session_id: Optional[str] = None,
+        proxy: Optional[str] = None,
     ):
-        self.client = httpx.AsyncClient(
-            headers=DEFAULT_HEADERS,
-            cookies=session_cookies or {},
-            follow_redirects=True,
-            timeout=httpx.Timeout(30.0, connect=10.0),
-        )
+        client_kwargs = {
+            "headers": DEFAULT_HEADERS,
+            "cookies": session_cookies or {},
+            "follow_redirects": True,
+            "timeout": httpx.Timeout(30.0, connect=15.0),
+        }
+        proxy = proxy or _PROXY
+        if proxy:
+            client_kwargs["proxy"] = proxy
+            logger.info(f"Using proxy: {proxy}")
+
+        self.client = httpx.AsyncClient(**client_kwargs)
         self.visitor_id = visitor_id
         self.session_id = session_id
 
@@ -171,6 +183,8 @@ class ImageFreeClient:
                     cookies=self._build_visitor_cookies(),
                 )
                 response.raise_for_status()
+                raw_text = response.text
+                logger.debug(f"Poll response (attempt {attempt}): {raw_text[:300]}")
                 result = _decode_response(response)
                 if result is None:
                     logger.warning(f"Poll decode failed (attempt {attempt})")

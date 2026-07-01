@@ -1,27 +1,22 @@
 """API key authentication for the 2API gateway."""
-import os
-import secrets
-import hashlib
 from typing import Optional
+
 from fastapi import Header, HTTPException, status
 
-# Generate a random API key if not set in env
-_API_KEY_ENV = "API_KEY"
-DEFAULT_API_KEY = os.getenv(_API_KEY_ENV, f"sk-imagefree2api-{secrets.token_hex(16)}")
+from app.config import get_api_key
 
 
-def get_api_key() -> str:
-    """Return the configured API key."""
-    return DEFAULT_API_KEY
+def get_configured_key() -> str:
+    """Return the API key from config.yaml."""
+    key = get_api_key()
+    if not key:
+        raise RuntimeError("API key not configured! Set api_key in config.yaml")
+    return key
 
 
 async def verify_api_key(authorization: Optional[str] = Header(None)):
     """
     Verify the Bearer token in the Authorization header.
-
-    Usage in FastAPI:
-        @app.post("/v1/images/generations")
-        async def generate(_auth=Depends(verify_api_key), ...):
     """
     if not authorization:
         raise HTTPException(
@@ -38,7 +33,8 @@ async def verify_api_key(authorization: Optional[str] = Header(None)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not secrets.compare_digest(token, DEFAULT_API_KEY):
+    from secrets import compare_digest
+    if not compare_digest(token, get_configured_key()):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API key",
