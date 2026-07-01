@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  api:
+    build: .
+    container_name: imagefree2api
+    ports:
+      - "${PORT:-7860}:7860"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - IMAGEFREE_BASE_URL=https://imagefree.org
+      - OUTPUT_DIR=/data/images
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
