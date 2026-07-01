@@ -9,7 +9,8 @@
 - ✅ **OpenAI 兼容** — 直接替换 `https://api.openai.com/v1/images/generations`
 - ✅ **完全免费** — imagefree 端 0 成本，仅需 capsolver 打码费（约 1 分钱/次）
 - ✅ **无需注册** — 不需要 imagefree 账号
-- ✅ **高并发** — 支持多请求排队
+- ✅ **Cookie 号池** — 多个独立 session 轮询使用，失败自动冷却
+- ✅ **高并发** — 支持多请求排队，可按 session 数量扩容
 - ✅ **Docker 一键部署**
 - ✅ **API Key 鉴权** — 内置 Bearer Token 认证
 
@@ -48,14 +49,15 @@ docker logs imagefree2api 2>&1 | grep "API Key"
 ### 生成图片
 
 ```bash
-curl -X POST http://localhost:7860/v1/images/generations \
+curl -X POST http://localhost:7861/v1/images/generations \
   -H "Authorization: Bearer sk-imagefree2api-xxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "imagefree",
+    "model": "gpt-image-2",
     "prompt": "a futuristic cyberpunk cat with neon eyes",
     "n": 1,
-    "size": "1024x1024"
+    "size": "1024x1024",
+    "response_format": "b64_json"
   }'
 ```
 
@@ -66,12 +68,12 @@ curl -X POST http://localhost:7860/v1/images/generations \
   "created": 1718123456,
   "data": [
     {
-      "url": "https://pub-89a5b0102174408d8d7f88dcf07eec20.r2.dev/images/2026/07/01/uuid.png"
+      "b64_json": "iVBORw0KGgoAAAANSUhEUgAA...",
+      "revised_prompt": "a futuristic cyberpunk cat with neon eyes"
     }
   ]
 }
 ```
-
 ### 支持的尺寸
 
 | 参数值 | 比例 |
@@ -85,13 +87,13 @@ curl -X POST http://localhost:7860/v1/images/generations \
 ### 健康检查
 
 ```bash
-curl http://localhost:7860/health
+curl http://localhost:7861/health
 ```
 
 ### 列出模型
 
 ```bash
-curl http://localhost:7860/v1/models \
+curl http://localhost:7861/v1/models \
   -H "Authorization: Bearer sk-imagefree2api-xxxxxxxxxxxxxxxx"
 ```
 
@@ -104,6 +106,36 @@ curl http://localhost:7860/v1/models \
 | `PORT` | `7860` | 服务端口 |
 | `MAX_CONCURRENCY` | `1` | 最大并发数 |
 | `REQUEST_INTERVAL_SECONDS` | `30` | 多图生成间隔（秒） |
+
+也可以在 `config.yaml` 中配置：
+
+```yaml
+generation:
+  max_concurrency: 6
+  request_interval: 30
+  output_dir: "/data/images"
+  session_pool:
+    enabled: true
+    session_count: 6
+    max_concurrent_per_session: 1
+    cooldown_seconds: 60
+    wait_timeout_seconds: 180
+```
+
+## 🍪 Cookie 号池策略
+
+`imagefree.org` 会使用浏览器会话 Cookie、访客 ID 和 Turnstile 验证状态。单一 Cookie 在并发请求下容易互相影响，所以项目内置了 session 号池：
+
+- 启动时创建 `session_count` 个独立 session，每个 session 有独立的 `visitor_id`、`session_id` 和 Cookie。
+- 每次生成图片前从号池借出一个可用 session，默认轮询分配，避免所有请求挤到同一个 Cookie。
+- `max_concurrent_per_session` 控制单个 session 同时处理的请求数，建议保持 `1`，让每个 Cookie 串行工作。
+- 总并发能力约等于 `session_count * max_concurrent_per_session`，同时还会受 `generation.max_concurrency` 全局限制。
+- 请求完成后会把上游返回的新 Cookie 写回对应 session，下次继续复用。
+- Cookie 和访客信息会持久化到 `output_dir` 的上一级目录下的 `session_pool.json`，服务重启后会继续使用原来的号池状态。
+- 某个 session 请求失败时会进入冷却，冷却时间为 `cooldown_seconds * 连续失败次数`，最多放大到 `cooldown_seconds * 5`。
+- 如果所有 session 都在使用中或冷却中，请求会等待；超过 `wait_timeout_seconds` 仍没有可用 session，就返回超时错误。
+
+推荐生产配置是多个 session、每个 session 一个并发槽，例如 `session_count: 6`、`max_concurrent_per_session: 1`。这样比单 Cookie 高并发更稳定，也更容易隔离失败。
 
 ## 💰 费用估算
 
