@@ -103,8 +103,23 @@ def get_proxy_config() -> Optional[str]:
 
 def get_generation_config() -> dict:
     c = get_config().get("generation", {})
+    pool = c.get("session_pool", {})
     return {
         "max_concurrency": int(c.get("max_concurrency", os.getenv("MAX_CONCURRENCY", "1"))),
         "request_interval": int(c.get("request_interval", os.getenv("REQUEST_INTERVAL_SECONDS", "30"))),
         "output_dir": c.get("output_dir", os.getenv("OUTPUT_DIR", "/data/images")),
+        "session_pool": {
+            "enabled": bool(pool.get("enabled", True)),
+            "session_count": int(pool.get("session_count", os.getenv("IMAGEFREE_SESSION_COUNT", "1"))),
+            "max_concurrent_per_session": int(
+                pool.get(
+                    "max_concurrent_per_session",
+                    os.getenv("IMAGEFREE_MAX_CONCURRENT_PER_SESSION", "1"),
+                )
+            ),
+            "cooldown_seconds": int(pool.get("cooldown_seconds", os.getenv("IMAGEFREE_SESSION_COOLDOWN_SECONDS", "60"))),
+            "wait_timeout_seconds": int(
+                pool.get("wait_timeout_seconds", os.getenv("IMAGEFREE_SESSION_WAIT_TIMEOUT_SECONDS", "180"))
+            ),
+        },
     }

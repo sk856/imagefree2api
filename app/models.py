@@ -9,7 +9,7 @@ class ImageGenerationRequest(BaseModel):
 
     Reference: https://platform.openai.com/docs/api-reference/images/create
     """
-    model: str = Field(default="imagefree", description="Model name")
+    model: str = Field(default="gpt-image-2", description="Model name")
     prompt: str = Field(..., description="Text description of the desired image")
     n: int = Field(default=1, ge=1, le=4, description="Number of images to generate")
     size: str = Field(
@@ -71,7 +71,7 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     """OpenAI-compatible chat completion request."""
-    model: str = Field(default="imagefree", description="Model name")
+    model: str = Field(default="gpt-image-2", description="Model name")
     messages: Optional[List[ChatMessage]] = Field(default=None, description="List of messages")
     input: Optional[List[dict]] = Field(default=None, description="Alternative input format for sub2api")
     instructions: Optional[str] = Field(default=None, description="System instructions")

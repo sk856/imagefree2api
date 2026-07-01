@@ -81,6 +81,10 @@ class ImageFreeClient:
     async def close(self):
         await self.client.aclose()
 
+    def export_cookies(self) -> Dict[str, str]:
+        """Return cookies collected during the session."""
+        return {cookie.name: cookie.value for cookie in self.client.cookies.jar}
+
     def _build_visitor_cookies(self) -> Dict[str, str]:
         """Return visitor tracking cookies if set."""
         cookies = {}
@@ -147,7 +151,7 @@ class ImageFreeClient:
             logger.error(f"HTTP {e.response.status_code}: {e.response.text[:200]}")
             return None
         except Exception as e:
-            logger.error(f"Submit failed: {e}")
+            logger.error(f"Submit failed: {e!r}")
             return None
 
     async def poll_status(
@@ -214,7 +218,7 @@ class ImageFreeClient:
             except httpx.HTTPStatusError as e:
                 logger.warning(f"Poll error (attempt {attempt}): HTTP {e.response.status_code}")
             except Exception as e:
-                logger.warning(f"Poll error (attempt {attempt}): {e}")
+                logger.warning(f"Poll error (attempt {attempt}): {e!r}")
 
             await _async_sleep(interval)
 
